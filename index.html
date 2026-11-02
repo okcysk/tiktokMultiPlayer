@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>TikTok Multi Player v1.0.0 — Web</title>
+  <!-- The version query makes each release fetch its own bookmarklet.js instead of a copy the browser cached. Keep it equal to VERSION. -->
+  <script src="./bookmarklet.js?v=1.0.0"></script>
+  <style>
+    :root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#eff1f5;background:#111318;color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#111318}
+    .sticky-controls{position:sticky;top:0;z-index:5;background:#111318;box-shadow:0 5px 14px #0005}header{display:flex;align-items:center;gap:16px;padding:14px 20px;background:#191c23;border-bottom:1px solid #30343d}h1{margin:0;font-size:18px;white-space:nowrap}h1 small{margin-left:5px;color:#aeb4c0;font-size:11px;font-weight:600}h2{margin:0 0 10px;font-size:16px}.brand-link{color:inherit;text-decoration:none;border-bottom:1px dashed #aeb4c0}.brand-link:hover{color:#c4f26a;border-bottom-style:solid}
+    .contacts{display:flex;align-items:center;gap:12px;margin-left:auto;white-space:nowrap}.contacts a{display:inline-flex;align-items:center;gap:6px;color:#c6cad2;text-decoration:none;font-size:13px}.contacts a:hover{color:#c4f26a;text-decoration:underline}.contact-icon{display:inline-grid;place-items:center;width:20px;height:20px;border:1px solid #59606d;border-radius:50%;font-size:12px;font-weight:800}
+    button{border:0;border-radius:8px;padding:10px 15px;background:#c4f26a;color:#19210e;font:inherit;font-weight:750;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}button.secondary{background:#30343d;color:#f2f3f6}.row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+    .status{max-width:900px;min-height:1.4em;margin:0 auto;padding:0 18px 10px;color:#aeb4c0;font-size:14px}.status.error{color:#ffaaa6}
+    main{display:grid;gap:16px;max-width:900px;margin:8px auto;padding:0 18px 24px}.panel{padding:16px;border:1px solid #323741;border-radius:10px;background:#1b1e25}.panel p,.panel ol,.panel ul{margin:0 0 10px;color:#c6cad2;font-size:14px;line-height:1.6}.panel ol,.panel>ul{padding-left:20px}.panel ol ul{margin:4px 0;padding-left:18px}.panel a{color:#c4f26a}kbd{padding:1px 5px;border:1px solid #555b66;border-radius:4px;background:#262a32;font:12px ui-monospace,Consolas,monospace}.panel .note{margin:10px 0 0;color:#aeb4c0;font-size:13px}
+    .bookmarklet{display:inline-block;padding:10px 16px;border:2px dashed #c4f26a;border-radius:8px;color:#c4f26a;font-weight:750;text-decoration:none;cursor:grab}
+    .player-view{position:fixed;inset:0;z-index:10;display:none;background:#07080a}.player-view.open{display:grid;grid-template-rows:auto 1fr}.player-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;background:#171a20}.player-head h2{margin:0;font-size:15px}.key-help{flex:1;color:#aeb4c0;font-size:12px}
+    .layout-control{display:flex;align-items:center;gap:6px;color:#aeb4c0;font-size:12px;font-weight:600}.layout-control select{padding:6px 8px;border:1px solid #555b66;border-radius:7px;background:#262a32;color:#fff;font:600 12px system-ui,sans-serif}.share-actions{display:flex;align-items:center;gap:6px}.share-actions button,.close{border:1px solid #555b66;border-radius:7px;padding:7px 9px;background:#262a32;color:#fff;font:600 12px system-ui,sans-serif}.share-actions button:hover,.close:hover{border-color:#c4f26a;color:#c4f26a}.close{padding:8px 12px}
+    .player-grid{display:grid;gap:3px;min-height:0;background:#000}.slot{position:relative;min-width:0;min-height:0;background:#000;overflow:hidden}.slot.keyboard-focus{outline:3px solid #c4f26a;outline-offset:-3px}.slot iframe{display:block;width:100%;height:100%;border:0}
+    /* The shield covers the embed so clicks and keys stay on this page: the first click must reach it to turn the sound on,
+       and a click inside TikTok's frame would also take keyboard focus away from the shortcuts. */
+    .shield{position:absolute;inset:0 0 18px;z-index:1;cursor:pointer}
+    .slot-actions{position:absolute;right:8px;top:8px;z-index:2;display:flex;gap:5px}.slot-actions button{border:1px solid #555b66;border-radius:7px;padding:7px 10px;background:#262a32;color:#fff;font-weight:600}
+    /* Seek bar modeled on the extension's: a thin always-visible bar with the playback speed beside it. */
+    .seek{position:absolute;left:0;right:0;bottom:0;z-index:2;display:flex;align-items:center;gap:8px;height:18px;padding:0 6px 0 0;background:#090a0bcc}
+    .seek input{flex:1;min-width:0;height:10px;margin:0;padding:0;appearance:none;-webkit-appearance:none;background:transparent;cursor:pointer;outline:none}
+    .seek input::-webkit-slider-runnable-track{height:4px;background:linear-gradient(to right,#c4f26a 0 var(--played,0%),#ffffff70 var(--played,0%) 100%)}.seek input::-moz-range-track{height:4px;background:#ffffff70}.seek input::-moz-range-progress{height:4px;background:#c4f26a}
+    .seek input::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;margin-top:-3px;border:0;border-radius:50%;background:#c4f26a}.seek input::-moz-range-thumb{width:10px;height:10px;border:0;border-radius:50%;background:#c4f26a}.seek input:focus-visible{filter:drop-shadow(0 0 4px #c4f26a)}
+    .seek .time,.seek .speed{flex:none;color:#fff;font:600 11px/1 system-ui,sans-serif;text-shadow:0 1px 3px #000;white-space:nowrap}.seek .speed{min-width:38px;text-align:right}.seek button{flex:none;padding:0 4px;background:none;color:#fff;font-size:12px;line-height:1}
+    .slot-message{position:absolute;inset:auto 8px 26px;z-index:2;padding:4px 7px;border-radius:5px;background:#000b;color:#ffd5d5;font-size:12px;pointer-events:none}
+    @media(max-width:700px){header{align-items:flex-start;flex-direction:column}.contacts{margin-left:0;flex-wrap:wrap}main{padding:0 12px 20px}.key-help{display:none}.share-actions{order:3;width:100%;justify-content:flex-end}.seek .time{display:none}}
+  </style>
+</head>
+<body>
+  <div class="sticky-controls">
+    <header>
+      <h1><a class="brand-link" href="https://www.tiktok.com/" target="_blank" rel="noopener noreferrer">TikTok</a> Multi Player <small>v1.0.0</small></h1>
+      <nav class="contacts" aria-label="連絡先"><a href="mailto:okcysk@gmail.com"><span class="contact-icon" aria-hidden="true">✉</span>okcysk@gmail.com</a><a href="https://x.com/okcysk46770" target="_blank" rel="noopener noreferrer"><span class="contact-icon" aria-hidden="true">𝕏</span>@okcysk46770</a></nav>
+    </header>
+    <p class="status" id="status" aria-live="polite"></p>
+  </div>
+  <main>
+    <section class="panel" aria-labelledby="pc-heading">
+      <h2 id="pc-heading">PCでの使い方</h2>
+      <ol>
+        <li>ブックマークバーを表示します（Chrome / Edge は <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>、Mac は <kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>）。</li>
+        <li>下の「<span class="bookmarklet-name">TT Multi</span>」ボタンをブックマークバーへドラッグして登録します（クリックでは登録されません）。</li>
+        <li>TikTokの動画一覧が出るページ（プロフィール、検索結果、ハッシュタグなど）で、登録したブックマークをクリックします。</li>
+        <li>サムネイル左上のチェックで動画を最大16本選び、右下の「Multi Playerで開く」を押すと、新しいタブでプレーヤーが開きます。</li>
+        <li>選択はブックマークをクリックするたびと、プレーヤーを開いた後にクリアされます。動画は1つのページの中で選んでください。動画を開いているときは「この動画を追加」も使えます。</li>
+      </ol>
+      <div class="row"><a class="bookmarklet" id="bookmarklet" href="#">TT Multi</a></div>
+      <p class="note" id="pc-status"></p>
+    </section>
+    <section class="panel" aria-labelledby="mobile-heading">
+      <h2 id="mobile-heading">スマホでの使い方</h2>
+      <ol>
+        <li>下の「コードをコピー」を押します。</li>
+        <li>このページをブックマークに追加し、そのブックマークを編集します。名前を「<span class="bookmarklet-name">TT Multi</span>」に、URLをコピーしたコードに置き換えて保存します。</li>
+        <li>ブラウザーでTikTokの動画一覧が出るページ（プロフィール、検索結果など）を開き、ブックマークを実行します。TikTokアプリではなく、ブラウザーで開いてください。
+          <ul>
+            <li>Android（Chrome）: アドレスバーに「TT Multi」と入力し、候補に出たブックマークをタップします。</li>
+            <li>iPhone（Safari）: ブックマーク一覧を開き、「TT Multi」をタップします。</li>
+          </ul>
+        </li>
+        <li>サムネイル左上のチェックで動画を選び、「Multi Playerで開く」を押します。</li>
+      </ol>
+      <div class="row"><button class="secondary" id="copy-bookmarklet">コードをコピー</button></div>
+      <p class="note" id="mobile-status"></p>
+    </section>
+    <section class="panel" aria-labelledby="limits-heading">
+      <h2 id="limits-heading">再生できない動画</h2>
+      <ul>
+        <li>TikTok公式の埋め込みプレーヤーで再生するため、公開されていて埋め込みが許可された動画だけが再生できます。非公開・友達限定・年齢確認が必要な動画や、投稿者が埋め込みを止めた動画は再生できません。</li>
+        <li>音量は変えられないため、↑ / ↓ キーは音声のオン / オフになります。倍速（G / H）は早送りを細かく繰り返して再現しているため、映像が少しカクつきます。</li>
+      </ul>
+    </section>
+  </main>
+  <section class="player-view" id="player-view" aria-label="動画プレーヤー">
+    <div class="player-head"><h2 id="player-title"></h2><span class="key-help">Tab / W A S D: 動画選択 · B / N: 前後の動画 · Z / X: 5秒 · C / V: 30秒 · ↑ / ↓: 音声オン / オフ · M: ミュート · Shift+M: 全体ミュート · F: 等速 · G: 2.5倍 · H: 10倍 · Space: 再生/停止 · Shift+Space: 全体再生/停止</span><label class="layout-control">画面数 <select id="slot-count" aria-label="同時再生数"><option value="1">1</option><option value="2">2</option><option value="4" selected>4</option><option value="9">9</option><option value="16">16</option></select></label><nav class="share-actions" aria-label="共有"><button type="button" id="copy-share">リンクをコピー</button><button type="button" id="share-x">X</button><button type="button" id="share-line">LINE</button><button type="button" id="share-threads">Threads</button></nav><button class="close" id="close-player">一覧に戻る</button></div>
+    <div class="player-grid" id="player-grid"></div>
+  </section>
+  <script>
+    const VERSION = 'v1.0.0';
+    const SIZES = [1, 2, 4, 9, 16];
+    const VIDEO_ID = /^\d{1,25}$/;
+    const $ = selector => document.querySelector(selector);
+    const status = $('#status'), playerView = $('#player-view'), grid = $('#player-grid'), slotCount = $('#slot-count');
+    // Each video: { id, title }. id is the TikTok post id.
+    let selected = [], slots = [], autoQueue = [], autoNextIndex = 0, shareTimer = null;
+    const setStatus = (text, error = false) => { status.textContent = text; status.className = error ? 'status error' : 'status'; };
+    const targetCount = () => Number(slotCount.value);
+    const formatTime = seconds => { if (!Number.isFinite(seconds)) return '0:00'; const s = Math.floor(seconds), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, r = String(s % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${r}` : `${m}:${r}`; };
+
+    // TikTok's official embed player (developers.tiktok.com/doc/embed-player), wrapped to look like the parts of <video>
+    // the player code uses: play/pause, currentTime, duration, paused/ended, muted, playbackRate and the matching events.
+    // The embed has no volume or speed control, so volume stays at 1 and faster speeds are made by seeking ahead.
+    const TIKTOK_ORIGIN = 'https://www.tiktok.com';
+    const SKIP_INTERVAL_MS = 500;
+    class TikTokMedia extends EventTarget {
+      constructor(id, { muted, loop }) {
+        super();
+        this.id = id; this.time = 0; this.duration = NaN; this.paused = true; this.ended = false; this.volume = 1;
+        this.mutedState = muted; this.rate = 1; this.ready = false; this.skipTimer = null; this.pendingSeek = null;
+        const url = new URL(`${TIKTOK_ORIGIN}/player/v1/${id}`);
+        const params = { autoplay: 1, controls: 0, rel: 0, description: 0, music_info: 0, native_context_menu: 0, closed_caption: 0, loop: loop ? 1 : 0 };
+        for (const [key, value] of Object.entries(params)) url.searchParams.set(key, String(value));
+        this.iframe = document.createElement('iframe');
+        this.iframe.src = url.href;
+        this.iframe.allow = 'autoplay; fullscreen; encrypted-media; picture-in-picture'; this.iframe.allowFullscreen = true;
+        this.iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+        this.onMessage = event => this.receive(event);
+        window.addEventListener('message', this.onMessage);
+      }
+      send(type, value) { if (this.ready) this.iframe.contentWindow?.postMessage({ 'x-tiktok-player': true, type, value }, TIKTOK_ORIGIN); }
+      emit(type) { this.dispatchEvent(new Event(type)); }
+      receive(event) {
+        if (event.source !== this.iframe.contentWindow) return;
+        let data = event.data;
+        if (typeof data === 'string') { try { data = JSON.parse(data); } catch { return; } }
+        if (!data?.['x-tiktok-player']) return;
+        const value = data.value;
+        if (data.type === 'onPlayerReady') {
+          this.ready = true;
+          this.send(this.mutedState ? 'mute' : 'unMute');
+          if (this.pendingSeek !== null) { this.send('seekTo', this.pendingSeek); this.pendingSeek = null; }
+          this.send('play');
+        } else if (data.type === 'onStateChange') {
+          if (value === 1) { this.paused = false; this.ended = false; this.emit('play'); }
+          else if (value === 2) { this.paused = true; this.emit('pause'); }
+          else if (value === 0) { this.paused = true; this.ended = true; this.emit('ended'); }
+        } else if (data.type === 'onCurrentTime') {
+          const time = Number(value?.currentTime), duration = Number(value?.duration);
+          if (duration > 0 && duration !== this.duration) { const first = !(this.duration > 0); this.duration = duration; this.emit('durationchange'); if (first) this.emit('loadedmetadata'); }
+          if (Number.isFinite(time)) { this.time = time; this.emit('timeupdate'); }
+        } else if (data.type === 'onMute') {
+          this.mutedState = Boolean(value); this.emit('volumechange');
+        } else if (data.type === 'onPlayerError') {
+          this.errorCode = Number(value?.errorCode ?? value?.code ?? value);
+          this.emit(this.errorCode === 3002 ? 'autoplayblocked' : 'error');
+        }
+      }
+      play() { this.ended = false; this.send('play'); return Promise.resolve(); }
+      pause() { this.send('pause'); }
+      get currentTime() { return this.time; }
+      set currentTime(seconds) { this.anchor = null; this.seek(seconds); }
+      seek(seconds) {
+        const to = Math.max(0, this.duration > 0 ? Math.min(this.duration, seconds) : seconds);
+        this.time = to;
+        if (this.ready) this.send('seekTo', to); else this.pendingSeek = to;
+        this.emit('timeupdate');
+      }
+      get muted() { return this.mutedState; }
+      set muted(value) { this.mutedState = Boolean(value); this.send(this.mutedState ? 'mute' : 'unMute'); this.emit('volumechange'); }
+      get playbackRate() { return this.rate; }
+      // Speeds above 1× play at 1× and seek to where the video should be by now, counted from an anchor (wall clock and
+      // position) taken when the speed was set. Every seek stalls the embed for a moment; aiming at the anchored
+      // target rather than at the gap since the last tick makes up those stalls instead of losing them.
+      set playbackRate(rate) {
+        this.rate = rate; this.anchor = null;
+        clearInterval(this.skipTimer); this.skipTimer = null;
+        if (rate > 1) {
+          this.skipTimer = setInterval(() => {
+            if (this.paused || !(this.duration > 0)) { this.anchor = null; return; }
+            const wall = performance.now(), time = this.time, end = this.duration - 0.5;
+            // Seeks by the user go through the currentTime setter, which drops the anchor. A reported position just
+            // after a seek can still be the old one, so only a jump back past the anchor (a loop) restarts it here.
+            const target = this.anchor && this.anchor.time + rate * (wall - this.anchor.wall) / 1000;
+            if (!this.anchor || time < this.anchor.time - 1 || (target >= end && time < 2)) { this.anchor = { wall, time }; return; }
+            if (time < target - 0.25 && time < end) this.seek(Math.min(end, target));
+          }, SKIP_INTERVAL_MS);
+        }
+        this.emit('ratechange');
+      }
+      destroy() { clearInterval(this.skipTimer); window.removeEventListener('message', this.onMessage); this.iframe.remove(); }
+    }
+
+    // Share state: the bookmarklet hands videos over in this format, and the open player keeps it
+    // current (position, speed, mute) so a reload or a shared link reopens the same view.
+    function encodeShareState(state) { const bytes = new TextEncoder().encode(JSON.stringify(state)); let binary = ''; for (const byte of bytes) binary += String.fromCharCode(byte); return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+    function decodeShareState(value) {
+      try {
+        const base64 = value.replace(/-/g, '+').replace(/_/g, '/'), binary = atob(base64 + '='.repeat((4 - base64.length % 4) % 4));
+        const state = JSON.parse(new TextDecoder().decode(Uint8Array.from(binary, ch => ch.charCodeAt(0))));
+        if (state?.v !== 1 || !SIZES.includes(Number(state.n)) || !Array.isArray(state.slots)) return null;
+        state.slots = state.slots.slice(0, 16).filter(item => item && VIDEO_ID.test(String(item.id))).map((item, index) => ({
+          ...item, id: String(item.id), t: String(item.t || `TikTok ${item.id}`).slice(0, 180), i: Number.isInteger(item.i) ? item.i : index
+        }));
+        return state;
+      } catch { return null; }
+    }
+    function updateShareUrl() {
+      if (!playerView.classList.contains('open')) return;
+      const state = { v: 1, n: targetCount(), c: slots.length, slots: slots.filter(slot => slot.current).map(slot => {
+        const video = slot.video, current = slot.current;
+        return { i: slot.position, id: current.id, t: current.title,
+          p: video && Number.isFinite(video.currentTime) ? Math.round(video.currentTime) : 0, r: video?.playbackRate || 1, m: video ? video.muted && !slot.autoMuted : false };
+      }) };
+      history.replaceState(null, '', `${location.pathname}${location.search}#share=${encodeShareState(state)}`);
+    }
+    async function shareCurrentUrl() { updateShareUrl(); const url = location.href; try { await navigator.clipboard.writeText(url); const button = $('#copy-share'), label = button.textContent; button.textContent = 'コピーしました'; setTimeout(() => button.textContent = label, 1400); } catch { prompt('このリンクをコピーしてください', url); } }
+    function shareTo(service) { updateShareUrl(); const url = encodeURIComponent(location.href), text = encodeURIComponent('TikTok Multi Player'); const links = { x: `https://twitter.com/intent/tweet?url=${url}&text=${text}`, line: `https://social-plugins.line.me/lineit/share?url=${url}`, threads: `https://www.threads.net/intent/post?text=${text}%20${url}` }; window.open(links[service], '_blank', 'noopener,noreferrer'); }
+
+    function makeSlot(index, auto) {
+      const element = document.createElement('div');
+      element.className = 'slot'; element.tabIndex = -1;
+      element.innerHTML = `<div class="shield"></div>${auto ? '<span class="slot-actions"><button type="button" class="back">Back</button><button type="button" class="next">Next</button></span>' : ''}<div class="seek"><input type="range" min="0" max="1000" value="0" aria-label="シークバー"><span class="time">0:00 / 0:00</span><button type="button" class="mute" title="ミュート">🔊</button><span class="speed">1.00x</span></div>`;
+      const slot = { element, order: index, position: index, auto, current: null, video: null, generation: 0, playlist: [], playlistIndex: index, history: [], dragging: false,
+        range: element.querySelector('.seek input'), time: element.querySelector('.time'), speed: element.querySelector('.speed'), mute: element.querySelector('.mute') };
+      slot.range.addEventListener('pointerdown', () => { slot.dragging = true; });
+      slot.range.addEventListener('pointerup', () => { slot.dragging = false; });
+      // Seek once the thumb is let go: each seek reloads part of the stream inside TikTok's player.
+      slot.range.addEventListener('change', () => {
+        const video = slot.video;
+        if (!video || !(video.duration > 0)) return;
+        video.currentTime = video.duration * Number(slot.range.value) / 1000;
+      });
+      slot.range.addEventListener('input', () => slot.range.style.setProperty('--played', `${Number(slot.range.value) / 10}%`));
+      slot.mute.addEventListener('click', () => { if (slot.video) slot.video.muted = !slot.video.muted; });
+      element.querySelector('.shield').addEventListener('click', () => {
+        if (swallowClick) { swallowClick = false; return; }
+        const video = slot.video;
+        if (!video) return;
+        if (video.paused) video.play(); else video.pause();
+      });
+      element.addEventListener('pointerdown', () => focusSlot(slot));
+      element.addEventListener('dblclick', event => { if (event.target.closest('.seek,.slot-actions')) return; if (document.fullscreenElement) document.exitFullscreen(); else element.requestFullscreen?.(); });
+      if (auto) {
+        element.querySelector('.next').addEventListener('click', () => nextSlot(slot));
+        element.querySelector('.back').addEventListener('click', () => previousSlot(slot));
+      }
+      element._slot = slot;
+      return slot;
+    }
+
+    function updateSeek(slot) {
+      const video = slot.video;
+      if (!video) return;
+      const duration = video.duration, progress = duration > 0 ? video.currentTime / duration : 0;
+      if (!slot.dragging) { slot.range.value = String(Math.round(progress * 1000)); slot.range.style.setProperty('--played', `${progress * 100}%`); }
+      slot.time.textContent = `${formatTime(video.currentTime)} / ${formatTime(duration)}`;
+    }
+    function updateSound(slot) { if (slot.video) slot.mute.textContent = slot.video.muted ? '🔇' : '🔊'; }
+    function slotMessage(slot, text, keep = false) {
+      slot.element.querySelector('.slot-message')?.remove();
+      if (!text) return;
+      const message = document.createElement('span'); message.className = 'slot-message'; message.textContent = text;
+      slot.element.append(message);
+      if (!keep) setTimeout(() => message.remove(), 4000);
+    }
+
+    function clearMedia(slot) {
+      slot.generation++;
+      slot.video?.destroy();
+      slot.video = null;
+      slotMessage(slot, '');
+    }
+    function putVideoInSlot(slot, video, restore = null) {
+      if (!video) return;
+      slot.current = video;
+      clearMedia(slot);
+      const generation = slot.generation;
+      // Without a click on this page the browser refuses sound, so the video starts muted until the first interaction.
+      const wantMuted = restore?.m === true;
+      slot.autoMuted = !wantMuted && !hasUserGesture();
+      if (slot.autoMuted) armUnmute();
+      // Without an auto-advance queue a short clip would just stop, so it loops the way it does on TikTok.
+      const media = new TikTokMedia(video.id, { muted: wantMuted || slot.autoMuted, loop: !slot.auto });
+      media.iframe.title = video.title;
+      slot.video = media;
+      slot.element.prepend(media.iframe);
+      for (const type of ['timeupdate', 'durationchange']) media.addEventListener(type, () => updateSeek(slot));
+      media.addEventListener('ratechange', () => { slot.speed.textContent = `${media.playbackRate.toFixed(2)}x`; });
+      media.addEventListener('volumechange', () => updateSound(slot));
+      media.addEventListener('ended', () => { if (slot.auto) advanceSlot(slot); });
+      media.addEventListener('autoplayblocked', () => {
+        if (slot.generation !== generation) return;
+        media.muted = true; slot.autoMuted = true;
+        armUnmute();
+        media.play();
+      });
+      media.addEventListener('error', () => {
+        if (slot.generation !== generation) return;
+        slotMessage(slot, 'この動画は埋め込み再生できません（非公開・年齢制限・埋め込み禁止など）。', true);
+        if (slot.auto) setTimeout(() => { if (slot.generation === generation) advanceSlot(slot); }, 2500);
+      });
+      if (restore) {
+        if (Number(restore.r) > 1) media.playbackRate = Math.min(16, Number(restore.r));
+        if (Number(restore.p) > 0) media.addEventListener('loadedmetadata', () => { if (slot.generation === generation) media.currentTime = Number(restore.p); }, { once: true });
+      }
+      slot.speed.textContent = `${media.playbackRate.toFixed(2)}x`;
+      slot.time.textContent = '0:00 / 0:00'; slot.range.value = '0'; slot.range.style.setProperty('--played', '0%');
+      updateSound(slot);
+    }
+    // Videos open with sound. A tab opened by the bookmarklet has had no click or key press yet, and browsers
+    // refuse sound until it has, so the videos start muted and their sound is turned on at the first interaction.
+    let unmuteArmed = false, swallowClick = false;
+    const hasUserGesture = () => navigator.userActivation?.hasBeenActive ?? false;
+    function armUnmute() {
+      if (unmuteArmed) return;
+      unmuteArmed = true;
+      setStatus('ブラウザーの制限により消音で開始しました。画面をクリックするかキーを押すと音声がオンになります。');
+      window.addEventListener('pointerdown', unmuteOnGesture, true);
+      window.addEventListener('keydown', unmuteOnGesture, true);
+    }
+    function unmuteOnGesture(event) {
+      window.removeEventListener('pointerdown', unmuteOnGesture, true);
+      window.removeEventListener('keydown', unmuteOnGesture, true);
+      unmuteArmed = false;
+      // The click that unmutes should not also pause the video it landed on, or re-mute through the mute button.
+      if (event.type === 'pointerdown' && event.target.closest?.('.shield')) swallowClick = true;
+      const onMuteButton = event.target.closest?.('.seek .mute');
+      for (const slot of slots) {
+        if (!slot.video || !slot.autoMuted) continue;
+        slot.autoMuted = false;
+        if (onMuteButton && slot.element.contains(onMuteButton)) continue;
+        slot.video.muted = false;
+        slot.video.play();
+      }
+      if (playerView.classList.contains('open')) setStatus('音声をオンにしました。');
+    }
+
+    function nextAutoVideo() { return autoNextIndex < autoQueue.length ? autoQueue[autoNextIndex++] : null; }
+    function advanceSlot(slot) { const video = nextAutoVideo(); if (!video) { setStatus('選択した動画をすべて再生しました。'); return; } slot.history.push(video); putVideoInSlot(slot, video); }
+    function nextSlot(slot) {
+      if (slot.auto) { advanceSlot(slot); return; }
+      if (slot.playlistIndex >= slot.playlist.length - 1) { setStatus('選択リストの最後の動画です。'); return; }
+      putVideoInSlot(slot, slot.playlist[++slot.playlistIndex]);
+    }
+    function previousSlot(slot) {
+      if (slot.auto) { if (slot.history.length < 2) { setStatus('この動画より前はありません。'); return; } slot.history.pop(); putVideoInSlot(slot, slot.history.at(-1)); return; }
+      if (slot.playlistIndex <= 0) { setStatus('選択リストの最初の動画です。'); return; }
+      putVideoInSlot(slot, slot.playlist[--slot.playlistIndex]);
+    }
+
+    // TikTok videos are portrait, so a square grid wastes most of a landscape screen. Pick the number of columns
+    // that gives each 9:16 video the most width in the space available (four videos on a wide screen: one row of four).
+    function bestColumns(count) {
+      const box = grid.getBoundingClientRect(), width = box.width || innerWidth, height = box.height || innerHeight;
+      let best = 1, bestWidth = 0;
+      for (let columns = 1; columns <= count; columns++) {
+        const rows = Math.ceil(count / columns), videoWidth = Math.min(width / columns, height / rows * 9 / 16);
+        if (videoWidth > bestWidth + 0.5) { best = columns; bestWidth = videoWidth; }
+      }
+      return best;
+    }
+    function applyLayout() {
+      if (!playerView.classList.contains('open')) return;
+      const capacity = targetCount(), columns = bestColumns(capacity);
+      grid.style.gridTemplateColumns = `repeat(${columns},minmax(0,1fr))`;
+      grid.style.gridTemplateRows = `repeat(${Math.ceil(capacity / columns)},minmax(0,1fr))`;
+      for (const slot of slots) {
+        slot.element.style.gridColumn = String(slot.position % columns + 1);
+        slot.element.style.gridRow = String(Math.floor(slot.position / columns) + 1);
+      }
+    }
+
+    function openPlayer(list, auto, restoreState = null) {
+      if (!list.length) return;
+      closeMedia();
+      const capacity = targetCount(), shown = list.slice(0, capacity);
+      autoQueue = auto ? list : []; autoNextIndex = shown.length;
+      $('#player-title').innerHTML = `<a class="brand-link" href="https://www.tiktok.com/" target="_blank" rel="noopener noreferrer">TikTok</a> Multi Player <small>${VERSION}${auto ? ' · Auto' : ''}</small>`;
+      playerView.classList.add('open');
+      slots = shown.map((video, index) => {
+        const slot = makeSlot(index, auto);
+        slot.playlist = list;
+        slot.position = Number.isInteger(video.shareIndex) ? video.shareIndex : index;
+        if (auto) slot.history.push(video);
+        grid.append(slot.element);
+        return slot;
+      });
+      applyLayout();
+      slots.forEach((slot, index) => putVideoInSlot(slot, shown[index], restoreState?.slots.find(item => item.i === slot.position)));
+      focusSlot(slots[0]);
+      clearInterval(shareTimer); shareTimer = setInterval(updateShareUrl, 1000); updateShareUrl();
+      if (!unmuteArmed) setStatus('');
+    }
+    function closeMedia() {
+      clearInterval(shareTimer); slots.forEach(clearMedia); slots = []; grid.replaceChildren();
+      window.removeEventListener('pointerdown', unmuteOnGesture, true); window.removeEventListener('keydown', unmuteOnGesture, true); unmuteArmed = false;
+    }
+    function closePlayer() { if (document.fullscreenElement) document.exitFullscreen(); playerView.classList.remove('open'); closeMedia(); history.replaceState(null, '', location.pathname + location.search); }
+
+    function focusSlot(slot) { if (!slot) return; document.querySelectorAll('.slot.keyboard-focus').forEach(item => item.classList.remove('keyboard-focus')); slot.element.classList.add('keyboard-focus'); try { slot.element.focus({ preventScroll: true }); } catch { slot.element.focus(); } }
+    function shiftFocus(key, reverse = false) {
+      const elements = [...grid.querySelectorAll('.slot')];
+      if (!elements.length) return;
+      let current = elements.findIndex(element => element.classList.contains('keyboard-focus')); if (current < 0) current = 0;
+      const firstTop = elements[0].getBoundingClientRect().top, firstNextRow = elements.findIndex(element => element.getBoundingClientRect().top > firstTop + 2);
+      const columns = firstNextRow < 0 ? elements.length : firstNextRow, row = Math.floor(current / columns), col = current % columns;
+      let next = current;
+      if (key === 'Tab') next = (current + (reverse ? -1 : 1) + elements.length) % elements.length;
+      else if (key === 'a' && col > 0) next = current - 1;
+      else if (key === 'd' && col < columns - 1 && current + 1 < elements.length) next = current + 1;
+      else if (key === 'w' && row > 0) next = current - columns;
+      else if (key === 's' && current + columns < elements.length) next = current + columns;
+      if (next !== current) focusSlot(elements[next]._slot);
+    }
+
+    window.addEventListener('keydown', event => {
+      if (!playerView.classList.contains('open') || event.altKey || event.ctrlKey || event.metaKey || event.target instanceof HTMLSelectElement) return;
+      const key = event.code?.startsWith('Key') ? event.code.slice(3).toLowerCase() : String(event.key || '').toLowerCase();
+      if (event.shiftKey && (event.code === 'Space' || key === 'm')) {
+        const videos = slots.map(slot => slot.video).filter(Boolean);
+        event.preventDefault(); event.stopPropagation();
+        if (key === 'm') { const muteAll = videos.some(video => !video.muted); videos.forEach(video => video.muted = muteAll); setStatus(muteAll ? '全動画をミュートしました。' : '全動画のミュートを解除しました。'); }
+        else { const pauseAll = videos.some(video => !video.paused && !video.ended); videos.forEach(video => pauseAll ? video.pause() : video.play()); setStatus(pauseAll ? '全動画を停止しました。' : '全動画を再生します。'); }
+        return;
+      }
+      if (key === 'escape') { event.preventDefault(); closePlayer(); return; }
+      if (key === 'tab') { event.preventDefault(); event.stopPropagation(); shiftFocus('Tab', event.shiftKey); return; }
+      if (['w', 'a', 's', 'd'].includes(key)) { event.preventDefault(); event.stopPropagation(); shiftFocus(key); return; }
+      const slot = grid.querySelector('.slot.keyboard-focus')?._slot;
+      if (!slot) return;
+      if (key === 'b' || key === 'n') { event.preventDefault(); event.stopPropagation(); if (key === 'b') previousSlot(slot); else nextSlot(slot); return; }
+      if (!['z', 'x', 'c', 'v', 'm', 'f', 'g', 'h', ' ', 'arrowup', 'arrowdown'].includes(key)) return;
+      event.preventDefault(); event.stopPropagation();
+      const video = slot.video;
+      if (!video) return;
+      if (key === ' ') { if (video.paused) video.play(); else video.pause(); }
+      else if (key === 'm') { video.muted = !video.muted; setStatus(video.muted ? 'ミュートしました。' : 'ミュートを解除しました。'); }
+      // The embed player has no volume control, so the volume keys turn the sound on and off.
+      else if (key === 'arrowup' || key === 'arrowdown') { video.muted = key === 'arrowdown'; setStatus(video.muted ? '音声をオフにしました。' : '音声をオンにしました。'); }
+      else if (['z', 'x', 'c', 'v'].includes(key)) { const delta = ({ z: -5, x: 5, c: -30, v: 30 })[key]; video.currentTime = video.currentTime + delta; }
+      else if (key === 'f') video.playbackRate = 1;
+      else if (key === 'g') video.playbackRate = video.playbackRate === 2.5 ? 1 : 2.5;
+      else if (key === 'h') video.playbackRate = video.playbackRate === 10 ? 1 : 10;
+    }, true);
+
+    function setupBookmarklet() {
+      const link = $('#bookmarklet');
+      const code = `javascript:${encodeURIComponent(`(${ttmpBookmarklet})(${JSON.stringify(location.origin + location.pathname)},${JSON.stringify(VERSION)})`)}`;
+      link.href = code;
+      // The version in the bookmark's name tells the user which build a registered bookmark holds.
+      link.textContent = `TT Multi ${VERSION}`;
+      document.querySelectorAll('.bookmarklet-name').forEach(name => { name.textContent = `TT Multi ${VERSION}`; });
+      link.addEventListener('click', event => { event.preventDefault(); $('#pc-status').textContent = 'このボタンはクリックではなく、ブックマークバーへドラッグして登録してください。'; });
+      $('#copy-bookmarklet').addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(code); $('#mobile-status').textContent = 'コードをコピーしました。ブックマークのURL欄に貼り付けてください。'; }
+        catch { prompt('このコードをコピーしてください', code); }
+      });
+      if (location.protocol === 'file:') {
+        const warning = 'ローカルファイルで開いています。TikTokのページからはこのファイルを開けないため、GitHub PagesのURLで開いてから登録してください。';
+        $('#pc-status').textContent = warning; $('#mobile-status').textContent = warning;
+      }
+    }
+
+    function loadFromHash() {
+      const param = new URLSearchParams(location.hash.slice(1)).get('share'), shared = param && decodeShareState(param);
+      if (!shared?.slots.length) return;
+      selected = shared.slots.map(item => ({ id: item.id, title: item.t, shareIndex: item.i }));
+      slotCount.value = String(shared.n);
+      openPlayer(selected, false, shared);
+      if (Number(shared.c) > shared.slots.length) setStatus(`共有リンク内の動画は${Number(shared.c)}本中${shared.slots.length}本です。リンクが欠けていないか確認してください。`, true);
+    }
+
+    // Changing the layout reopens the same videos in selection order, keeping each one's position, speed and mute.
+    function relayout() {
+      if (!playerView.classList.contains('open')) return;
+      const byId = new Map(slots.filter(slot => slot.current).map(slot => [slot.current.id, slot]));
+      selected = selected.map(({ shareIndex, ...video }) => video);
+      const restore = { slots: selected.map((video, i) => {
+        const slot = byId.get(video.id), media = slot?.video;
+        return { i, p: media ? media.currentTime : 0, r: media?.playbackRate || 1, m: media ? media.muted && !slot.autoMuted : false };
+      }) };
+      openPlayer(selected, false, restore);
+    }
+    slotCount.addEventListener('change', relayout);
+    window.addEventListener('resize', applyLayout);
+    $('#close-player').addEventListener('click', closePlayer);
+    $('#copy-share').addEventListener('click', shareCurrentUrl);
+    $('#share-x').addEventListener('click', () => shareTo('x'));
+    $('#share-line').addEventListener('click', () => shareTo('line'));
+    $('#share-threads').addEventListener('click', () => shareTo('threads'));
+    window.addEventListener('hashchange', loadFromHash);
+
+    setupBookmarklet();
+    loadFromHash();
+  </script>
+</body>
+</html>
