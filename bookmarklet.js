@@ -52,6 +52,16 @@ function ttmpBookmarklet(PLAYER_URL, VERSION) {
   const addCurrent = button('この動画を追加', false);
   const clear = button('クリア', false);
   const open = button('Multi Playerで開く', true);
+  /* Autoplay as on YouTube Shorts: the player moves a screen on to the next video when its video ends. Remembered on tiktok.com. */
+  let autoAdvance = false;
+  try { autoAdvance = localStorage.getItem('ttmp-auto-advance') === '1'; } catch (e) {}
+  const auto = button('', false);
+  auto.title = 'オンにすると、動画が終わるたびに次の動画へ切り替わります（4画面までで開き、残りは順に流れます）';
+  const paintAuto = () => {
+    auto.textContent = `自動再生 ${autoAdvance ? 'ON' : 'OFF'}`;
+    auto.style.background = autoAdvance ? '#c4f26a' : '#30333c'; auto.style.color = autoAdvance ? '#18200f' : '#f3f3f5';
+  };
+  paintAuto();
   const close = button('×', false);
   close.title = '閉じる';
   /* Contact links styled like the other Multi Players' headers: a circled icon followed by the address. */
@@ -67,7 +77,7 @@ function ttmpBookmarklet(PLAYER_URL, VERSION) {
   };
   const contacts = css(document.createElement('span'), 'display:inline-flex;align-items:center;gap:12px');
   contacts.append(contact('mailto:okcysk@gmail.com', '✉', 'okcysk@gmail.com'), contact('https://x.com/okcysk46770', '𝕏', '@okcysk46770'));
-  panel.append(label, count, addCurrent, clear, open, contacts, close, message);
+  panel.append(label, count, addCurrent, clear, auto, open, contacts, close, message);
   document.body.append(panel);
 
   let messageTimer;
@@ -133,10 +143,17 @@ function ttmpBookmarklet(PLAYER_URL, VERSION) {
     toggle({ id, title: clean(title) }, true);
   });
   clear.addEventListener('click', () => { selected = []; refresh(); });
+  auto.addEventListener('click', () => {
+    autoAdvance = !autoAdvance; paintAuto();
+    try { localStorage.setItem('ttmp-auto-advance', autoAdvance ? '1' : '0'); } catch (e) {}
+  });
   open.addEventListener('click', () => {
     if (!selected.length) return;
-    const slots = selected.map((video, i) => ({ i, id: video.id, t: video.title }));
-    const state = { v: 1, n: [1, 2, 4, 9, 16].find(n => n >= slots.length), c: slots.length, slots };
+    /* With autoplay, at most 4 screens open and the other videos wait their turn; otherwise every video gets a screen. */
+    const n = [1, 2, 4, 9, 16].find(size => size >= (autoAdvance ? Math.min(selected.length, 4) : selected.length));
+    const videos = selected.map(video => ({ id: video.id, t: video.title }));
+    const slots = videos.slice(0, n).map((video, i) => ({ i, ...video }));
+    const state = { v: 1, n, c: slots.length, slots, q: videos.slice(n), a: autoAdvance };
     const target = `${PLAYER_URL}#share=${encodeState(state)}`;
     /* No 'noopener' feature: with it window.open returns null, which would look like a blocked popup. */
     const win = window.open(target, '_blank');
