@@ -52,16 +52,10 @@ function ttmpBookmarklet(PLAYER_URL, VERSION) {
   const addCurrent = button('この動画を追加', false);
   const clear = button('クリア', false);
   const open = button('Multi Playerで開く', true);
-  /* Autoplay as on YouTube Shorts: the player moves a screen on to the next video when its video ends. Remembered on tiktok.com. */
-  let autoAdvance = false;
-  try { autoAdvance = localStorage.getItem('ttmp-auto-advance') === '1'; } catch (e) {}
-  const auto = button('', false);
-  auto.title = 'オンにすると、動画が終わるたびに次の動画へ切り替わります（4画面までで開き、残りは順に流れます）';
-  const paintAuto = () => {
-    auto.textContent = `自動再生 ${autoAdvance ? 'ON' : 'OFF'}`;
-    auto.style.background = autoAdvance ? '#c4f26a' : '#30333c'; auto.style.color = autoAdvance ? '#18200f' : '#f3f3f5';
-  };
-  paintAuto();
+  /* Plays videos one after another on one screen, as YouTube Shorts does: the selected videos, or with none selected,
+     every video on this page. It works without a selection, so it is never disabled. */
+  const sequence = button('順に自動再生', true);
+  sequence.title = '選択した動画（未選択ならこのページの動画）を1画面で順に再生します';
   const close = button('×', false);
   close.title = '閉じる';
   /* Contact links styled like the other Multi Players' headers: a circled icon followed by the address. */
@@ -77,7 +71,7 @@ function ttmpBookmarklet(PLAYER_URL, VERSION) {
   };
   const contacts = css(document.createElement('span'), 'display:inline-flex;align-items:center;gap:12px');
   contacts.append(contact('mailto:okcysk@gmail.com', '✉', 'okcysk@gmail.com'), contact('https://x.com/okcysk46770', '𝕏', '@okcysk46770'));
-  panel.append(label, count, addCurrent, clear, auto, open, contacts, close, message);
+  panel.append(label, count, addCurrent, clear, open, sequence, contacts, close, message);
   document.body.append(panel);
 
   let messageTimer;
@@ -143,17 +137,11 @@ function ttmpBookmarklet(PLAYER_URL, VERSION) {
     toggle({ id, title: clean(title) }, true);
   });
   clear.addEventListener('click', () => { selected = []; refresh(); });
-  auto.addEventListener('click', () => {
-    autoAdvance = !autoAdvance; paintAuto();
-    try { localStorage.setItem('ttmp-auto-advance', autoAdvance ? '1' : '0'); } catch (e) {}
-  });
-  open.addEventListener('click', () => {
-    if (!selected.length) return;
-    /* With autoplay, at most 4 screens open and the other videos wait their turn; otherwise every video gets a screen. */
-    const n = [1, 2, 4, 9, 16].find(size => size >= (autoAdvance ? Math.min(selected.length, 4) : selected.length));
-    const videos = selected.map(video => ({ id: video.id, t: video.title }));
-    const slots = videos.slice(0, n).map((video, i) => ({ i, ...video }));
-    const state = { v: 1, n, c: slots.length, slots, q: videos.slice(n), a: autoAdvance };
+  function launch(videos, n, sequential) {
+    const list = videos.map(video => ({ id: video.id, t: video.title }));
+    const slots = list.slice(0, n).map((video, i) => ({ i, ...video }));
+    /* o marks sequential play; q holds the videos that come after the ones on screen. */
+    const state = { v: 1, n, c: slots.length, slots, q: list.slice(n), o: sequential ? 1 : 0 };
     const target = `${PLAYER_URL}#share=${encodeState(state)}`;
     /* No 'noopener' feature: with it window.open returns null, which would look like a blocked popup. */
     const win = window.open(target, '_blank');
@@ -161,6 +149,25 @@ function ttmpBookmarklet(PLAYER_URL, VERSION) {
     /* The player has its own copy of the selection now, so the next pick starts from nothing. */
     selected = [];
     refresh();
+  }
+  /* Every video linked on the page, in page order, starting with the one open in the address bar if there is one. */
+  function pageVideos() {
+    const seen = new Set(), videos = [];
+    const add = info => { if (info && !seen.has(info.id)) { seen.add(info.id); videos.push(info); } };
+    const current = videoId(location.pathname);
+    if (current) add({ id: current, title: clean(document.querySelector('[data-e2e="browse-video-desc"], [data-e2e="video-desc"], h1')?.textContent || document.title) });
+    for (const anchor of document.querySelectorAll('a[href]')) if (!panel.contains(anchor)) add(videoInfo(anchor));
+    /* Keep the share link a sensible length. */
+    return videos.slice(0, 100);
+  }
+  open.addEventListener('click', () => {
+    if (!selected.length) return;
+    launch(selected, [1, 2, 4, 9, 16].find(n => n >= selected.length), false);
+  });
+  sequence.addEventListener('click', () => {
+    const videos = selected.length ? selected : pageVideos();
+    if (!videos.length) { notice('このページに動画が見つかりません。プロフィールや検索結果のページで押してください。'); return; }
+    launch(videos, 1, true);
   });
   close.addEventListener('click', () => {
     observer.disconnect(); panel.remove();
